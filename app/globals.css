@@ -1,0 +1,4592 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Task Tracker. See DESIGN.md.
+
+   The same console language as vdm-project-manager, which inherited it from
+   impressions: depth instead of rules, translucent panels over a deep aurora,
+   violet is the interface and never data. Tokens, surfaces, buttons, fields and
+   the expand-a-row behaviour are carried over deliberately and unchanged — Luka
+   should not have to learn a second interface.
+
+   What is different is what the colour is FOR. The project manager spends its
+   colour on progress. This spends it on TIME: a task's urgency tint is its
+   deadline — overdue is rose, due today is amber, everything further out is
+   neutral — and that tint lands on the countdown and the deadline field, the
+   data itself, never on a card's frame.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  --font-display: "Space Grotesk Variable", "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: "Inter Variable", Inter, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+:root {
+  --ground: #08080f;
+  --ground-2: #0f1020;
+  --surface: rgba(255, 255, 255, 0.038);
+  --surface-2: rgba(255, 255, 255, 0.06);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-soft: rgba(255, 255, 255, 0.05);
+
+  --ink: #f3f4fa;
+  --muted: #9aa2be;
+  --faint: #666e8c;
+
+  /* The interface. Never data. */
+  --accent: #7c5cff;
+  --accent-2: #22d3ee;
+  --accent-soft: rgba(124, 92, 255, 0.16);
+
+  --signal: #fb7185;
+  --warn: #fbbf24;
+  --good: #34d399;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --lift: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  --lift-lg: 0 30px 70px -30px rgba(0, 0, 0, 0.95);
+
+  /* Overridden per row with the task's own colour. */
+  --task-color: var(--accent);
+  /* Overridden per row with the urgency of its deadline. */
+  --urgency: var(--task-color);
+}
+
+html {
+  color-scheme: only dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--ground);
+  background-image:
+    radial-gradient(60rem 40rem at 12% -8%, rgba(124, 92, 255, 0.2), transparent 60%),
+    radial-gradient(48rem 34rem at 92% 4%, rgba(34, 211, 238, 0.14), transparent 62%),
+    radial-gradient(52rem 40rem at 50% 108%, rgba(124, 92, 255, 0.1), transparent 60%),
+    linear-gradient(180deg, var(--ground) 0%, var(--ground-2) 100%);
+  background-attachment: fixed;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* Links inherit by default so a link inside a button or a row does not shout.
+   Prose links must not: an instruction that says "open the developer portal"
+   is useless if the reader cannot see that those words are the way there. */
+a {
+  color: inherit;
+}
+
+.lede a,
+.steps a,
+.quote-meta a,
+.gate-foot a {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, var(--accent-2) 45%, transparent);
+  transition:
+    color 140ms var(--ease),
+    text-decoration-color 140ms var(--ease);
+}
+
+.lede a:hover,
+.steps a:hover,
+.quote-meta a:hover,
+.gate-foot a:hover {
+  color: #67e8f9;
+  text-decoration-color: currentColor;
+}
+
+/* The "go here" link at the end of a numbered step. Set apart from the prose
+   links above because it is the action, not a reference inside a sentence. */
+.step-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.09);
+  color: var(--accent-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 140ms var(--ease),
+    border-color 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+
+.step-link:hover {
+  background: rgba(34, 211, 238, 0.18);
+  border-color: var(--accent-2);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.step-link svg {
+  width: 11px;
+  height: 11px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- shell ---------------------------------------------------------------- */
+
+.main {
+  padding: 34px 30px 96px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.main-narrow {
+  max-width: 940px;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.mark {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.mark span {
+  display: block;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-top: 7px;
+}
+
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.who img {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+}
+
+/* --- surfaces ------------------------------------------------------------- */
+
+.panel,
+.figures,
+.track-panel,
+.detail {
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--lift);
+}
+
+.panel {
+  padding: 20px 22px;
+}
+
+.panel + .panel {
+  margin-top: 18px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-head h2 {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.panel-head .spacer {
+  margin-left: auto;
+}
+
+.panel p.lede {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 16px;
+  max-width: 68ch;
+}
+
+.notice {
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: linear-gradient(180deg, rgba(251, 113, 133, 0.14), rgba(251, 113, 133, 0.05));
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+  font-size: 13.5px;
+}
+
+.notice.good {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.12), rgba(52, 211, 153, 0.04));
+}
+
+.notice strong {
+  color: var(--signal);
+  font-family: var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.notice.good strong {
+  color: var(--good);
+}
+
+.notice code,
+code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.empty {
+  padding: 34px 20px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 13.5px;
+}
+
+/* --- figures -------------------------------------------------------------- */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+
+.figure {
+  padding: 16px 20px;
+  border-right: 1px solid var(--hairline-soft);
+}
+
+.figure:last-child {
+  border-right: none;
+}
+
+.figure .v {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  display: block;
+  line-height: 1.05;
+}
+
+.figure .v.good {
+  color: var(--good);
+}
+
+.figure .v.warn {
+  color: var(--warn);
+}
+
+.figure .v.attention {
+  color: var(--signal);
+}
+
+.figure .k {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: block;
+  margin-top: 8px;
+}
+
+/* --- toolbar -------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.field {
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13.5px;
+  min-width: 200px;
+  transition:
+    border-color 160ms var(--ease),
+    background 160ms var(--ease);
+}
+
+.field::placeholder {
+  color: var(--faint);
+}
+
+.field:focus {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.07);
+}
+
+.field[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+select.field {
+  min-width: 130px;
+  cursor: pointer;
+}
+
+select.field option {
+  background: #14162a;
+  color: var(--ink);
+}
+
+.field-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.btn {
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--muted);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition:
+    color 160ms var(--ease),
+    background 160ms var(--ease),
+    border-color 160ms var(--ease),
+    transform 160ms var(--ease);
+}
+
+.btn:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.9), rgba(124, 92, 255, 0.72));
+  border-color: rgba(124, 92, 255, 0.7);
+  color: #fff;
+  box-shadow: 0 10px 24px -14px rgba(124, 92, 255, 0.9);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(180deg, rgba(140, 112, 255, 1), rgba(124, 92, 255, 0.85));
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 6px 11px;
+  font-size: 12px;
+}
+
+.btn-danger:hover {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.btn-good:hover {
+  color: var(--good);
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.btn[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.btn-discord {
+  background: linear-gradient(180deg, #5865f2, #4752c4);
+  border-color: #5865f2;
+  color: #fff;
+  padding: 11px 20px;
+  font-size: 14px;
+  box-shadow: 0 12px 28px -14px #5865f2;
+}
+
+.btn-discord:hover {
+  background: linear-gradient(180deg, #6b76f5, #5058d0);
+  color: #fff;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.eyebrow {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sub-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 10px;
+}
+
+/* --- identity dots --------------------------------------------------------
+
+   A person's hue on a small round dot, and a task's own hue on its swatch.
+   Identity, not urgency: neither ever carries the time colours.
+   -------------------------------------------------------------------------- */
+
+.card-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--task-color);
+  box-shadow: 0 0 10px -1px var(--task-color);
+}
+
+.deadline-input {
+  width: 190px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  transition:
+    border-color 160ms var(--ease),
+    background 160ms var(--ease),
+    color 160ms var(--ease);
+}
+
+.deadline-input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.deadline-input:focus {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.07);
+}
+
+/* Set, and the urgency shows. The tint is the data — an overdue row is
+   findable from across the desk without reading a word of it. */
+.deadline-input[data-urgency="overdue"] {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.5);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.deadline-input[data-urgency="today"] {
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.09);
+}
+
+.deadline-input[data-urgency="later"] {
+  color: var(--ink);
+}
+
+.deadline-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.cadence {
+  width: 108px;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease),
+    background 160ms var(--ease),
+    color 160ms var(--ease);
+}
+
+.cadence option {
+  background: #14162a;
+  color: var(--ink);
+}
+
+.cadence[data-on="true"] {
+  color: var(--accent-2);
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+/* No deadline, no reminders — enforced here as well as in lib/reminders.ts, so
+   the rule is visible before it is discovered. */
+.cadence[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.quote {
+  border-left: 2px solid var(--task-color);
+  padding: 2px 0 2px 12px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.quote-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  margin-bottom: 12px;
+}
+
+.quote-meta a:hover {
+  color: var(--accent-2);
+}
+
+.note-edit {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.note-edit:focus {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.07);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.swatch-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  transition:
+    transform 140ms var(--ease),
+    border-color 140ms var(--ease);
+}
+
+.swatch-btn:hover {
+  transform: scale(1.18);
+}
+
+.swatch-btn[data-active="true"] {
+  border-color: var(--ink);
+  transform: scale(1.12);
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 3px 0;
+}
+
+.kv span:last-child {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hairline-soft);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.add-row .field {
+  flex: 1 1 260px;
+}
+
+.err {
+  color: var(--signal);
+  font-size: 12.5px;
+  padding: 0 18px 12px;
+}
+
+/* --- the board: a track of cards, and the task in focus beside it -------
+
+   Lucky35's ruling, 2026-09-28: every task is its own card carrying the name of
+   the person it was given to, on a track that moves left and right, with the
+   card in focus shown in full beside it. It replaced a table 1268px wide that
+   scrolled sideways and hid who had what.
+
+   The track is the one thing on this page that scrolls sideways, and it does
+   so INSIDE itself — the body never does. Cards snap to the middle, where the
+   focused one sits, and its neighbours show at either side, so the track reads
+   as something that moves. The detail column always shows the focused card,
+   and on a narrow screen drops underneath the track.
+   -------------------------------------------------------------------------- */
+
+.board-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  gap: 22px;
+  align-items: start;
+}
+
+.board-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+/* Sticky, and scrolls inside itself, so the detail stays beside the track
+   however long the task's history gets. */
+.board-detail {
+  position: sticky;
+  top: 18px;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius);
+  scroll-margin-top: 18px;
+}
+
+@media (max-width: 1000px) {
+  .board-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board-detail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+.track-panel {
+  --card-w: 280px;
+  overflow: hidden;
+}
+
+.track-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline-soft);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.track-step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+  transition:
+    color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+
+.track-step:hover:not([disabled]) {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.track-step[disabled] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.track-step svg {
+  width: 16px;
+  height: 16px;
+}
+
+.track-count {
+  min-width: 64px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.track {
+  /* The offsetParent the centring maths measures from. Without it the maths
+     only held because .track-panel's backdrop-filter happens to make that
+     panel one — remove the blur and every card lands half a card off. */
+  position: relative;
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  /* Half the track either side of a card, so the first and the last card can
+     both reach the middle. */
+  padding: 20px calc(50% - var(--card-w) / 2) 22px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.track:focus-visible {
+  outline-offset: -3px;
+}
+
+.track-panel .empty {
+  padding: 48px 28px;
+  max-width: 62ch;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.task-card {
+  flex: 0 0 var(--card-w);
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 190px;
+  padding: 16px 16px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.66;
+  transform: scale(0.97);
+  transition:
+    opacity 220ms var(--ease),
+    transform 220ms var(--ease),
+    border-color 220ms var(--ease),
+    background 220ms var(--ease),
+    box-shadow 220ms var(--ease);
+}
+
+.task-card:hover {
+  opacity: 0.9;
+}
+
+/* The card in focus. Violet is the interface's active state, which is exactly
+   what focus is — it says "this one", never "how soon". */
+.task-card[data-focused="true"] {
+  opacity: 1;
+  transform: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.22),
+    var(--lift);
+}
+
+.task-card[data-closed="true"] .tc-title-text {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.tc-when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+
+.tc-lock {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.tc-lock svg {
+  width: 13px;
+  height: 13px;
+}
+
+.tc-title {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+.tc-title .swatch,
+.mini-title .swatch {
+  margin-top: 6px;
+}
+
+.tc-title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  transition: color 140ms var(--ease);
+}
+
+.tc-title:hover .tc-title-text {
+  color: var(--accent);
+}
+
+.tc-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+/* A name you can press: data, so not tracked caps; a control, so violet on
+   hover and never cyan. */
+.tc-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+  text-underline-offset: 3px;
+  transition:
+    color 140ms var(--ease),
+    text-decoration-color 140ms var(--ease);
+}
+
+.tc-name:hover:not([disabled]) {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.tc-name[disabled] {
+  cursor: default;
+  text-decoration: none;
+}
+
+.tc-all {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  transition:
+    color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+
+.tc-all:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.tc-origin {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* What a task arrived without. Said where the data would be, dashed because
+   it is a gap rather than a value, and colourless: the colour budget is time. */
+.tc-missing {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255, 255, 255, 0.24);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tc-missing.lg {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.tc-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--good);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .track-panel {
+    --card-w: min(280px, 76vw);
+  }
+
+  .task-card {
+    min-height: 170px;
+  }
+}
+
+/* --- the live countdown ---------------------------------------------------
+
+   Time left, to the second, on every task with a deadline; how long overdue
+   once it has passed. Tabular numerals are not a flourish — without them a
+   seconds counter reflows its own width every second and visibly jitters.
+   The urgency tint lands on the figure itself, and an overdue task says so in
+   words, on a rose pill, so it is obvious from across the desk.
+   -------------------------------------------------------------------------- */
+
+.live-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.live-countdown[data-size="sm"] .lc-figure {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.live-countdown[data-size="lg"] .lc-figure {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.lc-word {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.live-countdown[data-urgency="later"] {
+  color: var(--ink);
+}
+
+.live-countdown[data-urgency="today"] {
+  color: var(--warn);
+}
+
+.live-countdown[data-urgency="overdue"] {
+  color: var(--signal);
+}
+
+.live-countdown[data-urgency="overdue"] .lc-word {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 113, 133, 0.5);
+  background: rgba(251, 113, 133, 0.12);
+}
+
+/* --- the task in focus ----------------------------------------------------
+
+   Everything you do to one task: its title and description, who has it, the
+   clock and how often it reminds, the stage, colour, done, dismiss, delete.
+   The description sits under the title; the countdown is the headline after
+   it, and the controls sit under that.
+   -------------------------------------------------------------------------- */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 22px 22px;
+}
+
+.detail > section {
+  min-width: 0;
+}
+
+.detail .sub-title {
+  margin-bottom: 8px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-title {
+  font-size: 18px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.detail-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: -8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  transition:
+    border-color 160ms var(--ease),
+    background 160ms var(--ease);
+}
+
+.detail-title-input:hover {
+  border-color: var(--hairline);
+}
+
+.detail-title-input:focus {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.07);
+}
+
+.detail[data-closed="true"] .detail-title,
+.detail[data-closed="true"] .detail-title-input {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+/* The description, under the title (Cenri, 2026-10-05). Body text in ink, not
+   a faint hint: it is what the person doing the work reads. The field is as
+   tall as what is written — `TaskDetail` sets its height, `rows` is the floor
+   — so ten lines are read whole; past the cap it scrolls, and the corner
+   still drags it. */
+.detail-desc-edit,
+.detail-desc-text {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.detail-desc-edit {
+  max-height: min(60vh, 32rem);
+}
+
+.detail-desc-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detail-lock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline-soft);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.detail-lock svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.detail-lock b {
+  color: var(--ink);
+}
+
+.detail-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.detail-row .deadline-input {
+  flex: 1 1 190px;
+  width: auto;
+}
+
+.detail-row .cadence {
+  flex: 0 0 auto;
+  width: 132px;
+}
+
+.detail-kvs {
+  width: 100%;
+}
+
+/* The next reminder is one of the two live states in this product. */
+.kv span.on {
+  color: var(--accent-2);
+}
+
+.detail-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.detail-assignee {
+  width: 100%;
+  min-width: 0;
+}
+
+.detail-assignee[data-missing="true"] {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Pick a person — anyone in the bot's servers (Lucky35's PO, 2026-10-05).
+   Opens in place under the field: the detail column scrolls inside itself,
+   and a floating list there is clipped. Violet marks the row the keyboard is
+   on and the one picked now; a gap is dashed, like every gap on the board. */
+.picker {
+  width: 100%;
+}
+
+.picker-field {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-field svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+}
+
+.picker-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.picker-field[data-missing="true"] {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.picker-panel {
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: #14162a;
+  box-shadow: var(--lift);
+}
+
+.picker-search {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  border-bottom: 1px solid var(--hairline-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.picker-list {
+  max-height: 260px;
+  margin: 0;
+  padding: 4px 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.picker-option {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.picker-option[data-active="true"] {
+  background: var(--accent-soft);
+}
+
+.picker-option[data-current="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.picker-where {
+  max-width: 50%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.picker-empty,
+.picker-note {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.picker-note {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* The same message tagged others too: their cards, one press away. */
+.detail-siblings {
+  flex-wrap: wrap;
+}
+
+.detail-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 12.5px;
+}
+
+.detail-links .tc-all {
+  margin-left: 0;
+}
+
+.detail-person {
+  margin: 0;
+  font-size: 13px;
+}
+
+.detail-stage-label {
+  margin-left: 6px;
+  color: var(--task-color);
+}
+
+/* The five-stage rail, squeezed into this column: each stage
+   takes a fifth of the width, and its name sits under its pip. The connecting
+   track is re-centred on the pip, which no longer sits in the middle. */
+.rail.detail-rail {
+  width: 100%;
+  /* A stage name that wraps makes its column taller; aligned to the top, every
+     pip stays on the one line the connecting track runs along. */
+  align-items: flex-start;
+}
+
+.detail-rail .stage {
+  flex: 1 1 0;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 0;
+}
+
+.detail-rail .stage::before,
+.detail-rail .stage::after {
+  top: 13px;
+}
+
+.stage-name {
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--faint);
+}
+
+.pip[disabled] {
+  cursor: default;
+}
+
+.pip[disabled]:hover {
+  transform: none;
+}
+
+.detail-actions {
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.add-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.add-panel .add-row {
+  border-top: none;
+}
+
+/* The assignee's two answers, on a task given to the viewer, and — on the
+   giver's side — the one line saying how the assignee's reminders are going. */
+.detail-assignee-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-assignee-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+/* --- not filed ------------------------------------------------------------
+
+   Tagged messages the tracker read and did not file. Folded: it is the
+   exception, and a board that led with its own misses would read as broken.
+   Colourless — none of this is about time — with violet only on the button.
+   -------------------------------------------------------------------------- */
+
+.skipped {
+  padding: 0;
+  overflow: hidden;
+}
+
+.skipped summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  padding: 13px 18px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.skipped summary::-webkit-details-marker {
+  display: none;
+}
+
+.skipped[open] summary {
+  color: var(--ink);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.skipped-count {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.skipped-hint {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+.skipped-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.skipped-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.skipped-item:last-child {
+  border-bottom: none;
+}
+
+.skipped-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.skipped-text {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.skipped-meta {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.skipped-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+/* Says out loud that nothing ages off this list, and offers the one bulk
+   decision — itself a person's decision, never a timer's. */
+.skipped-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--hairline-soft);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.skipped-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Search every unreviewed row, not only the pages loaded. */
+.skipped-find {
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.skipped-find .field {
+  width: 100%;
+  min-width: 0;
+}
+
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .skipped-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+}
+
+/* --- a person ------------------------------------------------------------- */
+
+.person-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.person-view .panel + .panel {
+  margin-top: 0;
+}
+
+.person-view-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.person-view-head .person-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.person-view-id {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.person-handle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.person-view .person-figs {
+  max-width: 520px;
+}
+
+.person-view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.person-view .empty {
+  padding: 18px 8px;
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.mini-grid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 13px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.025);
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+
+.mini-card:hover {
+  border-color: rgba(124, 92, 255, 0.45);
+  background: rgba(255, 255, 255, 0.045);
+  transform: translateY(-1px);
+}
+
+.mini-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.mini-title .swatch {
+  margin-top: 5px;
+}
+
+.mini-title .tc-title-text {
+  -webkit-line-clamp: 2;
+}
+
+.mini-card[data-closed="true"] .tc-title-text {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.mini-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* The owner's private notes and grade: kept, folded, last. */
+.person-private summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.person-private summary::-webkit-details-marker {
+  display: none;
+}
+
+.person-private summary svg {
+  width: 14px;
+  height: 14px;
+}
+
+.person-private[open] summary {
+  margin-bottom: 16px;
+  color: var(--ink);
+}
+
+.person-private-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 22px;
+}
+
+@media (max-width: 860px) {
+  .person-view-grid,
+  .person-private-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- settings ------------------------------------------------------------- */
+
+.steps {
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 30px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(124, 92, 255, 0.35);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  padding: 4px 11px 4px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--hairline);
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.status-pill[data-on="true"] {
+  color: var(--good);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.status-pill[data-error="true"] {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.35);
+  background: rgba(251, 113, 133, 0.09);
+}
+
+.connect-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.connect-row .field {
+  flex: 1 1 320px;
+}
+
+.guild {
+  border-top: 1px solid var(--hairline-soft);
+  padding: 14px 0 4px;
+}
+
+.guild:first-of-type {
+  border-top: none;
+}
+
+.guild-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+
+.channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* A channel chip is a switch, so it reads as pressable at rest and plainly on
+   when on. Watched is cyan, not violet: violet is chrome, and which channels
+   are being read is the most consequential piece of data on this page. */
+.chan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  transition:
+    color 160ms var(--ease),
+    border-color 160ms var(--ease),
+    background 160ms var(--ease),
+    transform 140ms var(--ease);
+}
+
+.chan:hover {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.chan[data-on="true"] {
+  color: var(--accent-2);
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.1);
+  box-shadow: 0 0 18px -8px var(--accent-2);
+}
+
+.chan[data-error="true"] {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.chan-hash {
+  opacity: 0.55;
+  font-family: var(--font-mono);
+}
+
+/* --- login ---------------------------------------------------------------- */
+
+.gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+}
+
+.gate-card {
+  width: min(440px, 100%);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--lift-lg);
+  padding: 38px 34px;
+  text-align: center;
+}
+
+.gate-card .mark {
+  margin-bottom: 14px;
+}
+
+.gate-card p {
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0 0 24px;
+  line-height: 1.65;
+}
+
+.gate-foot {
+  margin-top: 22px;
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The escape hatch for the minority who want to run on a Claude subscription
+   rather than metered credits. Collapsed by default and explicitly labelled
+   advanced, because it needs a terminal and the guided path above does not —
+   an option that costs most readers nothing to skip should not compete with
+   the one they are meant to take. */
+.advanced {
+  margin-top: 16px;
+  border-top: 1px solid var(--hairline-soft);
+  padding-top: 12px;
+}
+
+.advanced summary {
+  cursor: pointer;
+  color: var(--faint);
+  font-size: 12.5px;
+  font-weight: 600;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 140ms var(--ease);
+}
+
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced summary::before {
+  content: "▸";
+  font-size: 10px;
+  transition: transform 160ms var(--ease);
+}
+
+.advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.advanced summary:hover {
+  color: var(--muted);
+}
+
+/* A shell command the reader is meant to copy, not retype. The button is the
+   control; the code is shown so they can see what they are about to run,
+   because pasting an opaque command into a terminal is a thing people should
+   be able to inspect first. */
+.copyline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  max-width: 100%;
+}
+
+.copyline code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* --- your servers ---------------------------------------------------------
+
+   One row per Discord server. The only question a row answers is "can the
+   tracker see this place, and if not, what do I press" — so the state chip and
+   the invite button occupy the same slot on the right, and nothing else
+   competes for attention.
+
+   Cyan for "bot added" matches the watched-channel chips: across this whole
+   page, cyan means the tracker can see something.
+   -------------------------------------------------------------------------- */
+
+.servers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.server {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+
+.server:hover {
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.server[data-on="true"] {
+  border-color: rgba(34, 211, 238, 0.3);
+  background: rgba(34, 211, 238, 0.06);
+}
+
+.server-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  flex: none;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+}
+
+.server-icon-blank {
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.server-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.server-state.on {
+  color: var(--accent-2);
+}
+
+.server-state svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* --- which tasks: All / Assigned to me / I asked for / Done & dismissed ---
+
+   The cut that changes what you do next: work other people are waiting on you
+   for, versus work you are waiting on them for. A segmented control rather
+   than a dropdown, because with four options a dropdown hides three of them
+   behind a click for no gain.
+   -------------------------------------------------------------------------- */
+
+.lens {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.lens button {
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--faint);
+  border-right: 1px solid var(--hairline-soft);
+  transition:
+    color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+
+.lens button:last-child {
+  border-right: none;
+}
+
+.lens button:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lens button[data-on="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Four segments do not fit a phone in one line, and the page body must never
+   scroll sideways — so on a phone they become two by two. */
+@media (max-width: 560px) {
+  .toolbar .field {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .lens {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .lens button {
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+
+  .lens button:nth-child(2n) {
+    border-right: none;
+  }
+
+  .lens button:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
+}
+
+/* --- the stage rail -------------------------------------------------------
+
+   Ported from vdm-project-manager, deliberately: Luka reads both boards, and a
+   rail that behaves differently in two tools is worse than no rail. Filled pips
+   take the task's own colour; the connecting track fills up to the stage
+   reached and stays grey after it, so progress stops, visibly, where the work
+   stopped. The leading pip pulses: it answers "where is this one?" before you
+   read a label.
+   -------------------------------------------------------------------------- */
+
+.rail {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+.stage {
+  width: 88px;
+  flex: 0 0 88px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  padding: 7px 0;
+}
+
+/* The connecting track, drawn behind the pips in two halves so each half can
+   fill independently — that is what makes the leading pip read as "here". */
+.stage::before,
+.stage::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 240ms var(--ease);
+}
+
+.stage::before {
+  left: 0;
+  right: 50%;
+}
+
+.stage::after {
+  left: 50%;
+  right: 0;
+}
+
+.stage:first-child::before,
+.stage:last-child::after {
+  display: none;
+}
+
+.stage[data-filled="true"]::before {
+  background: color-mix(in srgb, var(--task-color) 55%, transparent);
+}
+
+.stage[data-filled="true"]:not([data-lead="true"])::after {
+  background: color-mix(in srgb, var(--task-color) 55%, transparent);
+}
+
+.pip {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: #10111f;
+  transition:
+    background 180ms var(--ease),
+    border-color 180ms var(--ease),
+    box-shadow 180ms var(--ease),
+    transform 160ms var(--ease);
+}
+
+.pip:hover {
+  border-color: var(--task-color);
+  transform: scale(1.18);
+}
+
+.pip[data-filled="true"] {
+  background: var(--task-color);
+  border-color: var(--task-color);
+  box-shadow: 0 0 14px -2px var(--task-color);
+}
+
+.pip[data-lead="true"] {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--task-color) 22%, transparent),
+    0 0 16px -2px var(--task-color);
+}
+
+.pip[data-lead="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--task-color) 40%, transparent);
+  animation: pulse 2.6s var(--ease) infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(1.14);
+  }
+}
+
+.pip svg {
+  width: 10px;
+  height: 10px;
+  color: #08080f;
+}
+
+/* A closed task's rail: present, legible, plainly finished. */
+.rail[data-closed="true"] {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
+/* A server's channel group header: name, how many are watched, and the bulk
+   toggle. A 45-channel server is 45 clicks without this, which is the
+   difference between someone trying it and someone giving up. */
+.guild-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.guild-head .guild-name {
+  margin-bottom: 0;
+}
+
+.guild-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.guild-head .btn {
+  margin-left: auto;
+}
+
+/* --- a person's face, name, figures, grade and notes -----------------------
+
+   Shared by the person view (`components/person-view.tsx`). Every selector is
+   prefixed `.person-` so it is greppable. Colour still means time: the only
+   tinted figure is Overdue, by the rose `.figure .v.attention` already had,
+   and violet stays on the things you press.
+   --------------------------------------------------------------------------- */
+
+.person-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+}
+
+.person-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Initials are a name abbreviated, not a figure, so they take the display
+   face rather than the tabular mono the counts are set in. */
+.person-avatar-initials {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* A name is data, not a section label, so it does not get `.panel-head h2`'s
+   tracked caps — the same reasoning that shaped `.card-name`. A name Discord
+   has not re-supplied renders as a bare snowflake and must still fit a line. */
+.person-panel-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Three counts across, always three: the strip is read at a glance and a
+   reflow into two-and-one would break that read. Everything else about it —
+   the surface, the mono figures, the rose on Overdue — is `.figures`. */
+.person-figs {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 0;
+}
+
+.person-figs .figure {
+  padding: 13px 12px;
+}
+
+.person-figs .figure .v {
+  font-size: 23px;
+}
+
+.person-figs .figure .k {
+  letter-spacing: 0.1em;
+  margin-top: 6px;
+}
+
+/* The only thing these sections need from the layout is permission to shrink,
+   so a long title ellipses instead of widening the column it sits in. */
+.person-grade,
+.person-notes,
+.person-message {
+  min-width: 0;
+}
+
+.person-grade-scale {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* A chosen pip is the active state of a control, which is exactly what violet
+   is for here — the same treatment `.lens button[data-on="true"]` gives a
+   chosen segment. The number on it is a figure, so it is mono and tabular. */
+.person-grade-pip {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.03);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  transition:
+    color 140ms var(--ease),
+    background 140ms var(--ease),
+    border-color 140ms var(--ease);
+}
+
+.person-grade-pip:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.person-grade-pip[data-on="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(124, 92, 255, 0.55);
+}
+
+.person-grade-clear {
+  margin-left: 4px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+  transition:
+    color 140ms var(--ease),
+    border-color 140ms var(--ease);
+}
+
+.person-grade-clear:hover:not([disabled]) {
+  color: var(--ink);
+}
+
+.person-grade-clear[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Said out loud in the one place a reader might otherwise assume the tracker
+   fills it in for them. */
+.person-hint {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.person-notes .note-edit {
+  min-height: 96px;
+}
+
+/* --- the compose affordance ------------------------------------------------
+
+   One field, one button, one result line — and that is the whole shape,
+   because a bot cannot read a DM between two humans (`AGENTS.md:21-22`). There
+   is no list, no bubble, no avatar-and-timestamp row, and nothing below may
+   ever grow into one.
+
+   It is assembled from the person view's own vocabulary — `.sub-title`,
+   `.note-edit`, `.btn`, `.person-hint` — so it reads as part of the page
+   rather than a form bolted onto the bottom of it, and it adds no new
+   surface, no new radius and no new spacing step. Violet stays on the button,
+   which is the thing you press. The only other colour it can take is on the
+   result line, and only once there is something to say.
+   --------------------------------------------------------------------------- */
+
+.person-message .note-edit {
+  min-height: 84px;
+}
+
+.person-message-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* A count is a figure: mono and tabular, like every other one in this product.
+   It is silent until it is telling you something — the rose arrives only past
+   the cap, where the send is about to be refused. */
+.person-message-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.person-message-count.attention {
+  color: var(--signal);
+}
+
+/* The one line of outcome. Rose when it did not go, green when it did — the
+   two states this feature can honestly report. It never says anything about
+   what came back, because nothing ever comes back here. */
+.person-message-result {
+  margin: 9px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.person-message-result.bad {
+  color: var(--signal);
+}
+
+.person-message-result.good {
+  color: var(--good);
+}
+
+/* --- the page never scrolls sideways on a phone ---------------------------
+
+   Buttons are `nowrap` everywhere else, which is right for a label and wrong
+   for "Invite again to <a server name of any length>": in a phone-width notice
+   it pushed the whole page sideways. Here, and only here, a button wraps. The
+   header's actions wrap too, and the page keeps a 16px gutter, not 30. */
+.notice-actions .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+@media (max-width: 560px) {
+  .main {
+    padding: 22px 16px 80px;
+  }
+}
+
+/* Under "Done & dismissed", when older closed work is not loaded. */
+.closed-note {
+  margin: 10px 4px 0;
+}
+
+/* A heading or the detail that receives keyboard focus after what held it
+   went away draws no ring for the mouse; the keyboard still sees it. */
+.person-panel-name:focus:not(:focus-visible),
+.detail:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- My tasks — everything on the person looking -------------------------
+
+   One row per task, grouped by how soon. The countdown keeps its time
+   colours; the row itself stays neutral, wearing the task's hue only on its
+   swatch, like a card. Four figures across here, not three. */
+.my-tasks .person-figs {
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 18px;
+}
+
+.mine-group {
+  padding: 16px 0 6px;
+}
+
+.mine-group .sub-title {
+  padding: 0 18px;
+  margin: 0 0 6px;
+}
+
+.mine-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mine-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "title when actions"
+    "meta  when actions";
+  align-items: center;
+  column-gap: 14px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.mine-title {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  text-align: left;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.mine-title .tc-title-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mine-title:hover .tc-title-text {
+  text-decoration: underline;
+}
+
+.mine-meta {
+  grid-area: meta;
+  margin-top: 3px;
+  padding-left: 19px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.mine-when {
+  grid-area: when;
+}
+
+.mine-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
+}
+
+.mine-foot {
+  margin: 14px 4px 0;
+}
+
+@media (max-width: 560px) {
+  .my-tasks .person-figs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mine-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title   when"
+      "meta    meta"
+      "actions actions";
+    row-gap: 6px;
+  }
+
+  .mine-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* Who a name typed in a DM might mean: offered, never assumed. Plain buttons —
+   picking a person is an action, and the server a candidate came from is
+   quieter than their name. */
+.detail-candidates .row-actions {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.candidate-where {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+/* --- Team, review, missed deadlines, project channels (2026-10-04) --------- */
+
+/* The person figures grow to five (score, sent back) and the team's to four:
+   as many columns as fit, never a lone figure on a second row at desk width. */
+.person-view .person-figs {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+/* One person per panel: who, what they are on, what waits. A row is a person,
+   not a card — their tasks are the same rows My tasks uses. */
+.team-member {
+  padding: 14px 0 8px;
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px 10px;
+}
+
+.team-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.team-name {
+  align-self: flex-start;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+}
+
+.team-name:hover {
+  text-decoration: underline;
+}
+
+.team-facts {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* The score is a figure: mono, tabular. Down is rose — a missed deadline is
+   an overdue that happened — and zero is neutral, never green: not missing
+   deadlines is the expectation, not an achievement to colour. */
+.team-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* This month and in all, side by side (Lucky35's PO, 2026-10-05). Up is
+   neutral like zero: on time is the expectation, not something to colour. */
+.team-scores {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.team-score[data-down="true"] {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.35);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.team-score-k {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.team-idle {
+  margin: 0;
+  padding: 8px 18px 6px 64px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.team-queued summary,
+.project-other summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 18px 6px 64px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.team-queued summary::-webkit-details-marker,
+.project-other summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-queued[open] summary {
+  color: var(--ink);
+}
+
+.team-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 18px 4px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Waiting for review is a question for the giver, not a time: it reads in
+   amber words on the status, never as a frame round the card. */
+.tc-status[data-review="true"] {
+  color: var(--warn);
+}
+
+.detail-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.detail-review-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.detail-review .note-edit {
+  min-height: 70px;
+}
+
+.detail-sent-back {
+  margin: 0;
+}
+
+/* A missed deadline: what it cost, beside the task it was on. An excused one
+   stays listed, struck through — the record never quietly shrinks. */
+.miss-cost {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--signal);
+}
+
+.miss-item[data-excused="true"] .tc-title-text {
+  text-decoration: line-through;
+  color: var(--faint);
+}
+
+.miss-item[data-excused="true"] .miss-cost {
+  color: var(--faint);
+}
+
+.person-misses {
+  padding: 16px 0 6px;
+}
+
+.person-misses .sub-title,
+.person-misses .empty {
+  padding: 0 18px;
+}
+
+/* Project channels: the same chips as the watch list, carrying their move.
+   Not cyan — being sorted into a category is not "on". */
+.project-group-k {
+  margin: 12px 0 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.project-chan {
+  padding-right: 5px;
+  cursor: default;
+}
+
+.project-chan:hover {
+  transform: none;
+}
+
+.project-move {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.project-move:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.project-move:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.project-none {
+  margin: 0;
+  font-size: 12px;
+}
+
+.project-other {
+  margin-top: 12px;
+}
+
+.project-other summary {
+  padding: 0 0 7px;
+}
+
+@media (max-width: 560px) {
+  .team-head {
+    flex-wrap: wrap;
+  }
+
+  .team-idle,
+  .team-queued summary {
+    padding-left: 18px;
+  }
+
+  .team-review {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Reopen / extend on review: the new deadline, under the choice. */
+.detail-review-deadline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Taken off you: said, never actionable — the title is not a link, because
+   the task is no longer yours to open. */
+.moved-item .mine-title {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* --- Monthly summary (Cenri, 2026-10-05) ---------------------------------
+
+   What was finished in one month, any month: My tasks' rows, grouped by who
+   did the work, each with the day it was finished. Neutral like the rest —
+   only "late" is rose, because a late finish is an overdue that happened, and
+   "waiting for review" amber words, as on the board. On time is not green:
+   meeting a deadline is the expectation (DESIGN.md, the score). */
+.month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-nav-label {
+  min-width: 9.5em;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.summary-figs {
+  margin-bottom: 0;
+}
+
+/* A person's name and count on the left, their score for the month on the right. */
+.summary-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.summary-group-head .team-score {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.summary-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title when"
+    "meta  when";
+}
+
+.summary-item .mine-title {
+  text-decoration: none;
+}
+
+.summary-day {
+  grid-area: when;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.summary-late {
+  color: var(--signal);
+}
+
+.summary-review {
+  color: var(--warn);
+}
+
+@media (max-width: 560px) {
+  .summary-item {
+    grid-template-areas:
+      "title when"
+      "meta  meta";
+  }
+
+  .month-nav-label {
+    min-width: 0;
+  }
+}
+
+/* --- Developers (Lucky35's PO, 2026-10-05) ---------------------------------
+
+   Which dev is on what, kept by hand, seen live. One row per developer: name
+   and status on the first line, what they are on in a field under it, who
+   changed it last under that. The status carries the colour, on the data
+   itself: Working is green like the Live pill, Blocked is rose like every
+   other thing that needs someone, In review is amber like "to review"; Idle
+   and Off stay neutral. */
+.dev-list {
+  padding: 16px 0 14px;
+}
+
+.dev-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  padding: 0 18px 10px;
+}
+
+.dev-list-head h3 {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dev-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dev-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.dev-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dev-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dev-status {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dev-status option {
+  background: #14162a;
+  color: var(--ink);
+}
+
+.dev-status[data-status="working"] {
+  color: var(--good);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.dev-status[data-status="blocked"] {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.4);
+  background: rgba(251, 113, 133, 0.1);
+}
+
+.dev-status[data-status="review"] {
+  color: var(--warn);
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.09);
+}
+
+.dev-status[data-status="off"] {
+  color: var(--faint);
+}
+
+.dev-working {
+  width: 100%;
+  min-width: 0;
+}
+
+.dev-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.dev-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.dev-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 18px 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.dev-add > .field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.dev-add-pick {
+  flex: 1 1 100%;
+}
+
+.dev-editors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 18px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.dev-editors .sub-title {
+  margin: 0;
+}
+
+.dev-editor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.dev-chip button {
+  display: inline-flex;
+  color: var(--faint);
+}
+
+.dev-chip button:hover {
+  color: var(--signal);
+}
+
+.dev-chip svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* One-press extensions under the deadline field: plain buttons — more time is
+   an action, not a time, so it takes none of the time colours. */
+.detail-extend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.detail-extend-k {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+/* --- Review with proof, priority, sort and filter (Lucky35's PO, 2026-10-07) --
+
+   The review panel sits under the description while work waits: two
+   approvals, the one the facts point to in violet (it is the button to
+   press), and what each costs beside it — "−1" in rose, because a −1 is an
+   overdue that happened. Disapprove asks Close or Reopen before it can be
+   confirmed. Proof and every verdict follow as a history, oldest first.
+   Priority is not time, so it takes none of the time colours: High is ink and
+   bold, Low is faint, Medium says nothing at all. */
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.review-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-choice {
+  white-space: normal;
+}
+
+.review-suggested {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.review-cost {
+  margin-left: 2px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.btn-primary .review-cost {
+  color: #fff;
+}
+
+.review-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-step .sub-title {
+  margin: 0;
+}
+
+.review-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.review-outcome input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.review-outcome b {
+  color: var(--ink);
+}
+
+.review-outcome[data-on="true"] {
+  border-color: rgba(124, 92, 255, 0.55);
+  background: var(--accent-soft);
+}
+
+.review-deadline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-deadline-warn {
+  color: var(--signal);
+}
+
+.btn-danger-solid {
+  color: var(--signal);
+  border-color: rgba(251, 113, 133, 0.45);
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.btn-danger-solid:hover {
+  color: #fff;
+  background: rgba(251, 113, 133, 0.32);
+}
+
+/* Reporting it done, with the proof. */
+.proof-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proof-form .sub-title {
+  margin: 0;
+}
+
+.proof-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proof-files li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.proof-files svg {
+  width: 13px;
+  height: 13px;
+  color: var(--faint);
+}
+
+.proof-files button {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.proof-files button:hover {
+  color: var(--signal);
+}
+
+.proof-err {
+  padding: 0;
+}
+
+.mine-proof {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+}
+
+/* Proof and verdicts, oldest first. */
+.task-history .sub-title {
+  margin-bottom: 8px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+  border-left: 2px solid var(--hairline);
+}
+
+.history-proof[data-continues="true"] {
+  margin-top: -2px;
+}
+
+.history-meta {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.history-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.history-cost {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--signal);
+}
+
+.history-excused {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.history-note {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.proof-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.proof-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 12.5px;
+  color: var(--accent-2);
+  overflow-wrap: anywhere;
+}
+
+.proof-link svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+
+.proof-size {
+  color: var(--faint);
+}
+
+.proof-image {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.proof-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+}
+
+/* Priority: never a time colour. */
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.priority-pill[data-priority="high"] {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.priority-pill[data-priority="low"] {
+  color: var(--faint);
+  border-style: dashed;
+}
+
+.priority-choices {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.priority-choice {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--faint);
+  border-right: 1px solid var(--hairline-soft);
+}
+
+.priority-choice:last-child {
+  border-right: none;
+}
+
+.priority-choice[data-on="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Sort and filter, under the tabs. */
+.view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: -8px 0 18px;
+}
+
+.view-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.view-sort {
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.view-date {
+  min-width: 0;
+  width: 150px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  letter-spacing: normal;
+}
+
+.view-date::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+.add-row .add-priority {
+  min-width: 0;
+  flex: 0 0 auto;
+  width: auto;
+  padding: 8px 10px;
+}
+
+@media (max-width: 560px) {
+  .view-dates {
+    flex-wrap: wrap;
+  }
+
+  .view-date {
+    width: 132px;
+  }
+}
+
+/* --- Activity, status control, undo, scores (PO, 2026-10-07) -------------- */
+
+/* What happened on a task: one timeline, newest first. A person's doing is
+   ink; the bot's messages are quieter; a failed delivery or a −1 is rose, the
+   only colour here that is data. */
+.task-activity .sub-title {
+  margin: 0;
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.activity-latest {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.activity-latest-k {
+  margin-right: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 12px;
+  list-style: none;
+  border-left: 2px solid var(--hairline);
+}
+
+.activity-item {
+  font-size: 12.5px;
+}
+
+.activity-line {
+  margin: 0;
+  color: var(--ink);
+}
+
+.activity-when {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.activity-item[data-bot="true"] .activity-line {
+  color: var(--muted);
+}
+
+.activity-item[data-tone="muted"] .activity-line {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--faint) 60%, transparent);
+}
+
+.activity-item[data-tone="bad"] .activity-line b,
+.activity-item[data-tone="bad"][data-bot="true"] .activity-line {
+  color: var(--signal);
+}
+
+.activity-item .proof-text,
+.activity-item .proof-link,
+.activity-item .proof-image {
+  margin-top: 4px;
+}
+
+.activity-undo {
+  margin-top: 6px;
+}
+
+/* --- score history (PO, 2026-10-09) --------------------------------------
+
+   Every point, permanent. Figures are mono and tabular, the Team view's
+   pill. Down is rose — a point lost is an overdue that happened; up and zero
+   are neutral, never green (DESIGN.md: not losing points is the expectation).
+   A correction is an entry like any other, its own sign, beside the one it
+   reverses — never a strike-through: nothing here was ever unwritten.
+   -------------------------------------------------------------------------- */
+
+.scores-rules ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.scores-rules li + li {
+  margin-top: 3px;
+}
+
+.score-refused {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.score-refused p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.score-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.score-kinds {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.score-kind {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border-right: 1px solid var(--hairline);
+}
+
+.score-kind:last-child {
+  border-right: none;
+}
+
+.score-kind[data-on="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.score-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.score-table {
+  padding: 6px 0;
+}
+
+.score-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 84px 84px 84px 84px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.score-head {
+  border-top: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.score-person-row[data-open="true"] > .score-row {
+  background: var(--surface);
+}
+
+.scores-toggle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.scores-toggle:disabled {
+  opacity: 0.35;
+}
+
+.scores-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+.scores-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.score-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.score-num[data-down="true"] {
+  color: var(--signal);
+}
+
+.score-num small {
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.scores-none {
+  padding: 6px 14px 12px 50px;
+  margin: 0;
+}
+
+.score-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.score-table .score-entries {
+  padding: 2px 14px 10px 50px;
+  background: var(--surface);
+}
+
+.score-entry {
+  border-top: 1px solid var(--hairline-soft);
+  scroll-margin-top: 80px;
+}
+
+.score-entry:first-child {
+  border-top: none;
+}
+
+.score-entry:target {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.score-entry-line {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 0;
+  text-align: left;
+  color: inherit;
+}
+
+.score-entry-line:hover .ledger-label {
+  color: var(--accent);
+}
+
+.ledger-delta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ledger-delta[data-sign="down"] {
+  color: var(--signal);
+}
+
+.ledger-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.ledger-label {
+  color: var(--ink);
+}
+
+.ledger-task {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.ledger-meta {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.score-when {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.score-corrected {
+  color: var(--faint);
+}
+
+.score-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.score-facts {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 4px 12px;
+  width: 100%;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.score-facts dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding-top: 2px;
+}
+
+.score-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.score-facts dd b {
+  color: var(--ink);
+}
+
+.score-detail-k {
+  margin: 4px 0 0;
+}
+
+.score-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.score-tasks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.score-task-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.score-tasks .tc-all svg {
+  width: 12px;
+  height: 12px;
+  vertical-align: -1px;
+}
+
+.score-proofs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.score-no-proof {
+  margin: 0;
+}
+
+.score-id {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.score-correct {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.score-correct .sub-title {
+  margin: 0;
+}
+
+/* A person's page: their latest points. Up is neutral. */
+.miss-cost[data-up="true"] {
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .score-row {
+    grid-template-columns: 24px minmax(0, 1fr) 64px 64px;
+    padding: 8px 10px;
+  }
+
+  /* On a phone: the period's net and the score to date; minus and plus are in the entries. */
+  .score-row > :nth-child(3),
+  .score-row > :nth-child(4) {
+    display: none;
+  }
+
+  .score-table .score-entries,
+  .scores-none {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .score-entry-line {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .score-entry-line .score-when {
+    grid-column: 2;
+    white-space: normal;
+  }
+
+  .score-detail {
+    margin-left: 0;
+  }
+
+  .score-facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .score-facts dd {
+    margin-bottom: 4px;
+  }
+
+  .score-export {
+    margin-left: 0;
+  }
+}
+
+/* --- remind now -----------------------------------------------------------
+
+   A ping at once, beside "Stop reminding" (PO, 2026-10-07, task 5): an
+   optional message, the button, and when it was last done by hand.
+   -------------------------------------------------------------------------- */
+
+.remind-now {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.remind-now-input {
+  min-height: 52px;
+}
+
+.remind-now-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remind-now-note[data-ok="true"] {
+  color: var(--good);
+}
+
+.remind-now-note[data-ok="false"] {
+  color: var(--signal);
+}
+
+/* --- developers, from ClickUp ---------------------------------------------
+
+   What is open on a developer in ClickUp (PO, 2026-10-12), in ClickUp's own
+   status names and colours (--cu), above the hand-kept line.
+   -------------------------------------------------------------------------- */
+
+.dev-clickup-line {
+  margin: 0;
+  padding: 0 18px 10px;
+}
+
+.dev-clickup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dev-clickup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.dev-clickup-k {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dev-clickup-who {
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.dev-clickup-who option {
+  background: #14162a;
+  color: var(--ink);
+}
+
+.cu-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cu-task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.cu-task[data-active="true"] {
+  color: var(--ink);
+}
+
+.cu-task:hover .cu-name {
+  text-decoration: underline;
+}
+
+.cu-status {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--cu) 60%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cu) 20%, transparent);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cu-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cu-list {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.dev-add-clickup {
+  flex: 1 1 100%;
+}
+
+.dev-hidden {
+  padding: 8px 18px 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.dev-hidden-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dev-hidden-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* --- developers: filter by ClickUp status, and what each status means ------
+
+   PO, 2026-10-12: "what does BLOCKED mean", and a list to filter by. One
+   chip per status on the list, in ClickUp's colour; pressed = shown.
+   -------------------------------------------------------------------------- */
+
+.cu-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px 10px;
+}
+
+.cu-chip {
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--cu) 45%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.cu-chip:hover {
+  color: var(--ink);
+}
+
+.cu-chip[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--cu) 75%, transparent);
+  background: color-mix(in srgb, var(--cu) 28%, transparent);
+  color: var(--ink);
+}
+
+.cu-legend {
+  margin: 0 18px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.cu-legend summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.cu-legend dl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 6px;
+}
+
+.cu-legend-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+
+.cu-legend dt,
+.cu-legend dd {
+  margin: 0;
+}
+
+.dev-filter-note {
+  margin: 0;
+  padding: 0 18px 10px;
+}
+
+.dev-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.dev-note-k {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+@media (max-width: 520px) {
+  .cu-legend-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* --- developers: every ClickUp task, done ones folded (2026-10-12) -------- */
+
+.cu-done {
+  font-size: 12.5px;
+}
+
+.cu-done summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.cu-done .cu-tasks {
+  margin-top: 6px;
+}
+
+.dev-signs-in {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* --- ask: did I already give someone a task about X (2026-10-12) ---------- */
+
+.ask-panel {
+  margin-bottom: 24px;
+}
+
+.ask-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ask-head .sub-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.ask-head .sub-title svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ask-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ask-form .field {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.ask-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.ask-answer {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.ask-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ask-match {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.ask-match-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ask-match-meta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.ask-figures {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* "Your servers" when the Discord sign-in behind it ran out (2026-10-16):
+   the product saying part of it is not working, so the rose frame. */
+.servers-stale {
+  margin: 12px 0 16px;
+}
+
+.servers-stale-action {
+  margin-top: 10px;
+}
+
+/* --- scores: a Minus or Plus figure opens what it counted (2026-10-18) ---- */
+
+.score-num-btn {
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.score-num-btn:hover:not(:disabled) {
+  border-color: var(--hairline);
+}
+
+.score-num-btn[aria-pressed="true"] {
+  border-color: currentColor;
+}
+
+.score-num-btn:disabled {
+  cursor: default;
+}
+
+.figure-btn {
+  display: block;
+  width: 100%;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.figure-btn[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 -2px 0 var(--signal);
+}
+
+.figure-btn:disabled {
+  cursor: default;
+}
+
+.score-sign-note {
+  margin: 6px 0 4px;
+}
+
+.score-entry-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 0 12px 8px 56px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.score-late {
+  color: var(--signal);
+}
+
+@media (max-width: 520px) {
+  .score-entry-facts {
+    padding-left: 12px;
+  }
+}
+
+/* Copied in, not given the work (Cenri, 2026-10-20): named on the card, no
+   card of their own. Plain — being copied in is not a time, nor a state. */
+.detail-cc {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.detail-cc-name {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.detail-not-for {
+  margin: 6px 0 0;
+}
